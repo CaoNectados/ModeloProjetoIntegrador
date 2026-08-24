@@ -7,6 +7,17 @@ use PDO;
 
 class ProtetorRepository extends BaseRepository
 {
+    // Usado por: RelatorioService::obterRelatorioAdmin() (dropdown de filtro por entidade)
+    public function listarValidados(): array
+    {
+        $sql = "SELECT protetor_id, nome_fantasia, tipo_documento
+                FROM PROTETOR
+                WHERE validado = 1 AND deletado_em IS NULL
+                ORDER BY nome_fantasia ASC";
+
+        return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     // Usado por: AnimalController, PerfilController, OnBoardingService, AuthService, UsuarioAdminService e PerfilService
     public function buscarPorUsuarioId(int $usuarioId): ?array
     {
