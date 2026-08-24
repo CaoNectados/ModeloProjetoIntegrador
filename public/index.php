@@ -77,6 +77,9 @@ $router->post('/perfil/trocar-email/confirmar', 'geral/PerfilController@confirma
 // Alternar Perfil
 $router->post('/perfil/trocar', 'geral/PerfilController@alternar');
 
+// Excluir Conta (soft delete)
+$router->post('/perfil/excluir', 'geral/PerfilController@excluir');
+
 
 // ==========================================
 // 4. ROTAS DE AUTENTICAÇÃO

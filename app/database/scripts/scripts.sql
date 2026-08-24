@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS ADOTANTE (
     descricao TEXT NULL,
     tamanho_interno_moradia ENUM('pequeno', 'medio', 'grande') NULL,
     detalhes TEXT NULL,
+    petiscos_diarios INT UNSIGNED NOT NULL DEFAULT 10,
     criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deletado_em TIMESTAMP NULL DEFAULT NULL,
     CONSTRAINT fk_adotante_usuario FOREIGN KEY (usuario_id) REFERENCES USUARIO (usuario_id) ON UPDATE CASCADE

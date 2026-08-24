@@ -292,6 +292,17 @@ class UsuarioRepository extends BaseRepository
         return $stmt->execute([':status' => $novoStatus, ':id' => $usuarioId]);
     }
 
+    // Usado por: PerfilController::excluir() (soft delete da conta pelo próprio usuário)
+    public function excluirConta(int $usuarioId): bool
+    {
+        $sql = "UPDATE USUARIO
+                SET deletado_em = NOW(),
+                    status_conta = 'inativo'
+                WHERE usuario_id = :id";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([':id' => $usuarioId]);
+    }
+
     // Usado por: UsuarioAdminService::alterarStatusPerfil()
     public function atualizarPerfisAtivos(int $usuarioId, string $perfisAtivos, string $tipoAtual): bool
     {
