@@ -8,12 +8,29 @@ $fotoPerfilSessao = $_SESSION['foto_perfil'] ?? null;
 $fotoFundoSessao = null;
 $petiscosDiarios = null;
 
+$statusSolicitacaoProtetor = null; // null = nunca solicitou virar Protetor/ONG
+$tipoSolicitacaoProtetor = null;   // 'protetor' (cpf) ou 'ong' (cnpj), pra rotular a mensagem
+
 if ($tipoPerfil === 'adotante') {
     $adotanteInfo = (new \app\repositories\AdotanteRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
     if (empty($fotoPerfilSessao)) {
         $fotoPerfilSessao = $adotanteInfo['foto_perfil'] ?? null;
     }
     $petiscosDiarios = isset($adotanteInfo['petiscos_diarios']) ? (int)$adotanteInfo['petiscos_diarios'] : 10;
+
+    // RF 20: status da solicitação de upgrade para Protetor/ONG (se houver). Reaproveita os
+    // mesmos campos (validado/deletado_em) já usados pelo admin em /admin/solicitacoes.
+    $solicitacaoProtetor = (new \app\repositories\ProtetorRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
+    if ($solicitacaoProtetor) {
+        $tipoSolicitacaoProtetor = (strtolower($solicitacaoProtetor['tipo_documento'] ?? 'cpf') === 'cnpj') ? 'ONG' : 'Protetor';
+        if (!empty($solicitacaoProtetor['deletado_em'])) {
+            $statusSolicitacaoProtetor = 'recusada';
+        } elseif (!empty($solicitacaoProtetor['validado'])) {
+            $statusSolicitacaoProtetor = 'aprovada';
+        } else {
+            $statusSolicitacaoProtetor = 'pendente';
+        }
+    }
 } elseif (in_array($tipoPerfil, ['protetor', 'ong'], true)) {
     $protetorInfo = (new \app\repositories\ProtetorRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
     if ($protetorInfo) {
@@ -103,12 +120,20 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
         ['label' => 'Editar Perfil',          'icone' => 'editar-perfil.svg', 'url' => '/perfil/editar'],
         ['label' => 'Alternar Perfil',        'icone' => 'alternar.svg',      'action' => 'abrirModalTrocaPerfil()'],
         ['label' => 'Petiscos diários',       'icone' => 'petiscos.svg',      'url' => '/petiscos', 'valor' => (int)$petiscosDiarios],
-        ['label' => 'Torne-se uma ONG/Protetor', 'icone' => 'torne-se.svg',   'url' => '/onboarding'],
         ['label' => 'Termos de Uso',          'icone' => 'termos.svg',        'action' => 'abrirModalTermos()'],
         ['label' => 'Excluir Conta',          'icone' => 'excluir.svg',       'action' => 'abrirModalExcluirConta()'],
         ['label' => 'Sair',                   'icone' => 'sair.svg',          'url' => '/logout'],
         ['label' => 'Denunciar',              'icone' => 'denunciar.svg',     'url' => '/denuncias/nova'],
     ];
+
+    // RF 20: "Torne-se Protetor/ONG" só aparece como botão clicável quando ainda não há
+    // solicitação em andamento ou quando ela foi recusada (reenvio). Pendente/aprovada
+    // viram um aviso informativo (ver banner logo abaixo do nome), sem link de ação.
+    if ($statusSolicitacaoProtetor === null) {
+        $botoes[] = ['label' => 'Torne-se Protetor/ONG', 'icone' => 'torne-se.svg', 'url' => '/onboarding'];
+    } elseif ($statusSolicitacaoProtetor === 'recusada') {
+        $botoes[] = ['label' => 'Reenviar Solicitação', 'icone' => 'torne-se.svg', 'url' => '/onboarding'];
+    }
 }
 
 $paginasBotoes = array_chunk($botoes, 6);
@@ -170,6 +195,35 @@ $paginasBotoes = array_chunk($botoes, 6);
         <h2 class="font-shantell text-2xl font-bold text-text-dark dark:text-white text-center mb-6">
             <?= htmlspecialchars($nomeUsuario) ?>
         </h2>
+
+        <?php if ($statusSolicitacaoProtetor !== null): ?>
+            <!-- RF 20: Status da solicitação de upgrade para Protetor/ONG -->
+            <?php
+                $bannerConfig = [
+                    'pendente' => [
+                        'classes' => 'bg-amarelo/30 dark:bg-preto2 border-amarelo/60 text-text-dark',
+                        'icone'   => '🕓',
+                        'texto'   => "Sua solicitação para se tornar {$tipoSolicitacaoProtetor} está em análise (pendente).",
+                    ],
+                    'recusada' => [
+                        'classes' => 'bg-erro/10 border-erro/30 text-erro',
+                        'icone'   => '❌',
+                        'texto'   => "Sua solicitação para se tornar {$tipoSolicitacaoProtetor} foi recusada. Verifique seu e-mail para mais detalhes e reenvie os dados corrigidos.",
+                    ],
+                    'aprovada' => [
+                        'classes' => 'bg-sucesso/10 border-sucesso/30 text-sucesso',
+                        'icone'   => '✅',
+                        'texto'   => "Sua solicitação foi aprovada! Toque em \"Alternar Perfil\" para acessar seu perfil de {$tipoSolicitacaoProtetor}.",
+                    ],
+                ][$statusSolicitacaoProtetor] ?? null;
+            ?>
+            <?php if ($bannerConfig): ?>
+                <div class="w-full flex items-start gap-2 rounded-2xl border px-4 py-3 mb-6 text-sm font-poppins font-medium <?= $bannerConfig['classes'] ?>">
+                    <span class="text-lg leading-none"><?= $bannerConfig['icone'] ?></span>
+                    <span class="text-text-dark dark:text-white"><?= htmlspecialchars($bannerConfig['texto']) ?></span>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
 
         <!-- Container de Ações -->
         <div class="w-full bg-gray-200 dark:bg-preto1 rounded-3xl p-5 shadow-inner relative border border-gray-300 dark:border-preto3">

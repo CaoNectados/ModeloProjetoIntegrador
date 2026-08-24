@@ -86,6 +86,47 @@ class OnboardingService
         return false;
     }
 
+    // Usado por: OnBoardingController::verificarSeJaPossuiPerfil() e PerfilController (RF 20 -
+    // status da solicitação de upgrade de Adotante para Protetor/ONG). Reaproveita
+    // ProtetorRepository::buscarPorUsuarioId(), que já traz sempre a solicitação mais recente
+    // (ORDER BY protetor_id DESC), cobrindo naturalmente o caso de reenvio após recusa.
+    public function obterSolicitacaoProtetorAtual(int $usuarioId): ?array
+    {
+        return $this->protetorRepo->buscarPorUsuarioId($usuarioId);
+    }
+
+    // Usado por: OnBoardingController::salvarProtetor() (RF 20 - upgrade de Adotante para
+    // Protetor/ONG). processarOng() é 100% reaproveitado do fluxo original e, por isso, sempre
+    // promove tipo_atual/sessão para 'protetor'/'ong' ao final — o que é o comportamento certo
+    // para quem está se cadastrando pela primeira vez, mas não para quem já é Adotante e só
+    // está solicitando um perfil adicional. Esse método corrige o estado logo em seguida:
+    // mantém a pessoa navegando como Adotante (perfil ativo e dados pessoais) enquanto a
+    // solicitação de Protetor/ONG fica pendente de aprovação em segundo plano.
+    public function restaurarPerfilAtivoAdotante(int $usuarioId, array $usuarioOriginal): void
+    {
+        $this->usuarioRepo->atualizarDadosPerfil(
+            $usuarioId,
+            (string)($usuarioOriginal['nome'] ?? ''),
+            $usuarioOriginal['telefone'] ?? null,
+            isset($usuarioOriginal['regiao_id']) ? (int)$usuarioOriginal['regiao_id'] : null,
+            (string)($usuarioOriginal['logradouro'] ?? ''),
+            (string)($usuarioOriginal['numero'] ?? '')
+        );
+
+        $this->usuarioRepo->atualizarTipoAtual($usuarioId, 'adotante');
+
+        if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
+        $_SESSION['tipo_perfil']  = 'adotante';
+        $_SESSION['usuario_nome'] = $usuarioOriginal['nome'] ?? ($_SESSION['usuario_nome'] ?? '');
+        $_SESSION['validado']     = true;
+        $_SESSION['recusado']     = false;
+        $_SESSION['perfil_ativo'] = [
+            'id'   => $usuarioId,
+            'tipo' => 'adotante'
+        ];
+    }
+
     // Usado por: OnBoardingController (pré-preenchimento do formulário de protetor/ONG)
     public function obterDadosPreenchidosProtetor(int $usuarioId): ?array
     {
