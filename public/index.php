@@ -80,6 +80,9 @@ $router->post('/perfil/trocar', 'geral/PerfilController@alternar');
 // Excluir Conta (soft delete)
 $router->post('/perfil/excluir', 'geral/PerfilController@excluir');
 
+// Relatórios e Estatísticas (RF 12) — visão individual da ONG/Protetor
+$router->get('/relatorios', 'geral/RelatorioController@index');
+
 
 // ==========================================
 // 4. ROTAS DE AUTENTICAÇÃO
@@ -108,6 +111,10 @@ $router->post('/redefinir-senha/processar', 'auth/AuthController@processarRedefi
 
 // Dashboard
 $router->get('/admin/dashboard', 'admin/DashboardController@index');
+
+// Relatórios e Estatísticas (RF 12) — visão global e consolidada
+$router->get('/admin/relatorios', 'admin/RelatorioController@index');
+$router->get('/admin/relatorios/exportar-csv', 'admin/RelatorioController@exportarCsv');
 
 // Solicitações de Cadastro (ONGs e Protetores)
 $router->get('/admin/solicitacoes', 'admin\SolicitacaoProtetorController@index');
