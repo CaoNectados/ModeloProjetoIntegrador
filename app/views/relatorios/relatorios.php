@@ -21,21 +21,60 @@ $iconesStatus = [
     'adotado'    => '❤️',
     'desativado' => '⏸️',
 ];
+
+$nomeEntidade = $_SESSION['usuario_nome'] ?? 'Minha página';
+$periodoRotulo = $anoFiltro !== null
+    ? ($mesFiltro !== null ? ($mesesNomes[$mesFiltro] . '/' . $anoFiltro) : (string) $anoFiltro)
+    : 'Todo o período';
 ?>
 
+<!-- Não existe biblioteca de PDF no projeto (composer.json só tem phpmailer) — em vez de
+     adicionar uma dependência nova só pra isso, o botão "Baixar PDF" aciona a impressão
+     nativa do navegador (window.print), que já oferece "Salvar como PDF". O CSS abaixo
+     esconde o chrome do app (menu, filtro, rodapé) e mantém só o conteúdo do relatório. -->
+<style>
+    @media print {
+        header, aside#sidebar, #botao-sidebar, footer, .no-print {
+            display: none !important;
+        }
+        #area-conteudo {
+            margin-left: 0 !important;
+            overflow: visible !important;
+        }
+        body, .card-padrao {
+            background: white !important;
+            box-shadow: none !important;
+        }
+        #cabecalho-impressao {
+            display: block !important;
+        }
+    }
+</style>
+
 <div class="max-w-2xl mx-auto pb-16 px-4 sm:px-6">
-    <div class="flex items-center justify-between pt-6 mb-6">
+    <!-- Cabeçalho só visível na impressão/PDF, com contexto que some ao imprimir -->
+    <div id="cabecalho-impressao" class="hidden mb-6">
+        <h1 class="font-shantell text-2xl font-bold text-text-dark">Relatório — <?= htmlspecialchars($nomeEntidade) ?></h1>
+        <p class="text-sm text-text-muted">Período: <?= htmlspecialchars($periodoRotulo) ?> • Gerado em <?= date('d/m/Y \à\s H:i') ?></p>
+    </div>
+
+    <div class="flex items-center justify-between pt-6 mb-6 no-print">
         <div>
             <h1 class="font-shantell text-2xl font-bold text-text-dark dark:text-white">Relatórios</h1>
             <p class="text-xs text-text-muted">Volume de animais e perfil de adoções da sua página</p>
         </div>
-        <a href="<?= $urlBase ?>/perfil" class="text-xs font-bold text-primary dark:text-roxinhoFofo underline hover:opacity-80 shrink-0">
-            &larr; Voltar ao perfil
-        </a>
+        <div class="flex items-center gap-3 shrink-0">
+            <button type="button" onclick="window.print()" class="text-xs font-bold text-white bg-primary px-3 py-2 rounded-full hover:opacity-90 transition">
+                📄 Baixar PDF
+            </button>
+            <a href="<?= $urlBase ?>/perfil" class="text-xs font-bold text-primary dark:text-roxinhoFofo underline hover:opacity-80">
+                &larr; Voltar
+            </a>
+        </div>
     </div>
 
     <!-- Filtro por mês/ano -->
-    <form method="GET" action="<?= $urlBase ?>/relatorios" class="card-padrao flex flex-wrap items-end gap-3 mb-8">
+    <form method="GET" action="<?= $urlBase ?>/relatorios" class="card-padrao flex flex-wrap items-end gap-3 mb-8 no-print">
         <div>
             <label class="label-padrao" for="filtro-ano">Ano</label>
             <select name="ano" id="filtro-ano" class="input-padrao">

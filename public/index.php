@@ -114,6 +114,7 @@ $router->get('/admin/dashboard', 'admin/DashboardController@index');
 
 // Relatórios e Estatísticas (RF 12) — visão global e consolidada
 $router->get('/admin/relatorios', 'admin/RelatorioController@index');
+$router->get('/admin/relatorios/exportar-csv', 'admin/RelatorioController@exportarCsv');
 
 // Solicitações de Cadastro (ONGs e Protetores)
 $router->get('/admin/solicitacoes', 'admin\SolicitacaoProtetorController@index');

@@ -57,14 +57,14 @@
             </div>
         </div>
 
-        <!-- BOTÕES DE RELATÓRIO -->
+        <!-- BOTÕES DE RELATÓRIO (RF 12) -->
         <div class="flex flex-col items-center gap-2 max-w-md mx-auto">
-            <button type="button" class="w-full border border-gray-400 bg-white text-black font-bold py-2 rounded-lg shadow-sm hover:bg-gray-50">
+            <a href="<?= URL_BASE ?>/admin/relatorios/exportar-csv" class="w-full text-center border border-gray-400 bg-white text-black font-bold py-2 rounded-lg shadow-sm hover:bg-gray-50">
                 Exportar CSV
-            </button>
-            <button type="button" class="w-full bg-black text-white font-bold py-2 rounded-lg shadow-sm hover:bg-gray-800">
+            </a>
+            <a href="<?= URL_BASE ?>/admin/relatorios" class="w-full text-center bg-black text-white font-bold py-2 rounded-lg shadow-sm hover:bg-gray-800">
                 Gerar Relatório Geral do Sistema
-            </button>
+            </a>
         </div>
     </div>
 

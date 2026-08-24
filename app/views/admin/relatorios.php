@@ -11,12 +11,26 @@ $periodosOpcoes = [
     'mes_atual' => 'Mês atual',
     'ano_atual' => 'Ano atual',
 ];
+
+// URL de exportação carrega os mesmos filtros que já estão aplicados na tela.
+$queryExportacao = http_build_query(array_filter([
+    'periodo'     => $filtrosAplicados['periodo'] !== 'todos' ? $filtrosAplicados['periodo'] : null,
+    'protetor_id' => $filtrosAplicados['protetor_id'],
+    'status'      => $filtrosAplicados['status'],
+]));
+$urlExportarCsv = $urlBase . '/admin/relatorios/exportar-csv' . ($queryExportacao ? '?' . $queryExportacao : '');
 ?>
 
 <div class="space-y-8 pb-10">
-    <div class="my-4">
-        <h1 class="text-3xl font-bold font-shantell text-primary text-center">Relatórios e Estatísticas</h1>
-        <p class="text-xs text-text-muted text-center mt-1">Visão consolidada da plataforma CãoNectados</p>
+    <div class="my-4 flex flex-col items-center gap-3">
+        <div class="text-center">
+            <h1 class="text-3xl font-bold font-shantell text-primary">Relatórios e Estatísticas</h1>
+            <p class="text-xs text-text-muted mt-1">Visão consolidada da plataforma CãoNectados</p>
+        </div>
+        <a href="<?= $urlExportarCsv ?>"
+           class="inline-flex items-center gap-2 border border-gray-400 bg-white text-black text-sm font-bold py-2 px-4 rounded-lg shadow-sm hover:bg-gray-50 transition">
+            ⬇️ Exportar CSV<?= $queryExportacao ? ' (com os filtros atuais)' : '' ?>
+        </a>
     </div>
 
     <!-- FILTROS AVANÇADOS -->
@@ -82,11 +96,21 @@ $periodosOpcoes = [
         <h2 class="text-xl font-bold font-shantell text-text-dark mb-1">Desempenho por Entidade</h2>
         <p class="text-xs text-text-muted mb-4">Quem mais cadastra e quem tem a maior taxa de adoção concluída</p>
 
+        <?php if (!empty($relatorio['ranking'])): ?>
+            <div class="relative mb-3 max-w-sm">
+                <span class="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">🔍</span>
+                <input type="text"
+                       id="buscaEntidadeRanking"
+                       placeholder="Buscar por nome da ONG ou Protetor..."
+                       class="input-padrao pl-10 bg-white">
+            </div>
+        <?php endif; ?>
+
         <div class="card-padrao bg-white overflow-x-auto p-0">
             <?php if (empty($relatorio['ranking'])): ?>
                 <p class="text-sm text-text-muted italic p-6 text-center">Nenhuma entidade validada encontrada.</p>
             <?php else: ?>
-                <table class="w-full text-sm">
+                <table class="w-full text-sm" id="tabela-ranking-entidades">
                     <thead>
                         <tr class="bg-gray-100 text-left text-xs uppercase text-gray-600">
                             <th class="px-4 py-3 font-bold">Entidade</th>
@@ -113,6 +137,7 @@ $periodosOpcoes = [
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                <p id="buscaEntidadeVazio" class="hidden text-sm text-text-muted italic p-6 text-center">Nenhuma entidade encontrada para essa busca.</p>
             <?php endif; ?>
         </div>
     </div>
@@ -179,5 +204,22 @@ $periodosOpcoes = [
         </div>
     </div>
 </div>
+
+<script>
+    document.getElementById('buscaEntidadeRanking')?.addEventListener('input', function (e) {
+        const termo = e.target.value.toLowerCase().trim();
+        const linhas = document.querySelectorAll('#tabela-ranking-entidades tbody tr');
+        let algumaVisivel = false;
+
+        linhas.forEach(function (linha) {
+            const corresponde = linha.innerText.toLowerCase().includes(termo);
+            linha.style.display = corresponde ? '' : 'none';
+            if (corresponde) algumaVisivel = true;
+        });
+
+        const avisoVazio = document.getElementById('buscaEntidadeVazio');
+        if (avisoVazio) avisoVazio.classList.toggle('hidden', algumaVisivel);
+    });
+</script>
 
 <?php require_once __DIR__ . '/../templates/footer.php'; ?>
