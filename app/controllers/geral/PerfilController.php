@@ -410,4 +410,31 @@ class PerfilController extends Controller
 
         $this->redirecionarComMensagem('sucesso', 'Perfil alternado para ' . ucfirst($tipoSession) . ' com sucesso!', '/perfil');
     }
+
+    // Usado por: rota POST /perfil/excluir (soft delete da conta pelo próprio usuário)
+    public function excluir(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return;
+        }
+
+        try {
+            $usuarioId = (int)$_SESSION['usuario_id'];
+
+            $this->usuarioRepo->excluirConta($usuarioId);
+
+            if (session_status() !== PHP_SESSION_NONE) {
+                session_unset();
+                session_destroy();
+            }
+
+            $this->json(200, [
+                'status'       => 'sucesso',
+                'mensagem'     => 'Sua conta foi excluída com sucesso.',
+                'redirect_url' => URL_BASE . '/login'
+            ]);
+        } catch (Exception $e) {
+            $this->json(400, ['status' => 'erro', 'mensagem' => $e->getMessage()]);
+        }
+    }
 }

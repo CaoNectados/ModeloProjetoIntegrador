@@ -5,21 +5,41 @@ $tipoPerfil = $_SESSION['perfil_ativo']['tipo'] ?? $_SESSION['tipo_perfil'] ?? '
 $nomeUsuario = $_SESSION['usuario']['nome'] ?? $_SESSION['usuario_nome'] ?? 'Nome de Usuário';
 
 $fotoPerfilSessao = $_SESSION['foto_perfil'] ?? null;
-if (empty($fotoPerfilSessao)) {
-    if ($tipoPerfil === 'adotante') {
-        $adotanteInfo = (new \app\repositories\AdotanteRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
+$fotoFundoSessao = null;
+$petiscosDiarios = null;
+
+if ($tipoPerfil === 'adotante') {
+    $adotanteInfo = (new \app\repositories\AdotanteRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
+    if (empty($fotoPerfilSessao)) {
         $fotoPerfilSessao = $adotanteInfo['foto_perfil'] ?? null;
-    } elseif (in_array($tipoPerfil, ['protetor', 'ong'], true)) {
-        $protetorInfo = (new \app\repositories\ProtetorRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
-        if ($protetorInfo) {
-            $paginaInfo = (new \app\repositories\PaginaRepository())->buscarPorProtetorId((int)$protetorInfo['protetor_id']);
+    }
+    $petiscosDiarios = isset($adotanteInfo['petiscos_diarios']) ? (int)$adotanteInfo['petiscos_diarios'] : 10;
+} elseif (in_array($tipoPerfil, ['protetor', 'ong'], true)) {
+    $protetorInfo = (new \app\repositories\ProtetorRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
+    if ($protetorInfo) {
+        $paginaInfo = (new \app\repositories\PaginaRepository())->buscarPorProtetorId((int)$protetorInfo['protetor_id']);
+        if (empty($fotoPerfilSessao)) {
             $fotoPerfilSessao = $paginaInfo['foto_perfil'] ?? null;
         }
+        $fotoFundoSessao = $paginaInfo['foto_fundo'] ?? null;
     }
     // 'usuario' (sem nenhum perfil ativo) e 'administrador' caem no placeholder padrão abaixo.
 }
 
 $urlBase = defined('URL_BASE') ? rtrim(URL_BASE, '/') : '';
+
+// Monta a URL pública (assets/uploads/...) a partir de um caminho relativo salvo no banco,
+// aplicando a mesma limpeza de prefixo usada para a foto de perfil logo abaixo.
+$montarUrlUpload = function (?string $caminhoRelativo) use ($urlBase): ?string {
+    if (empty($caminhoRelativo)) {
+        return null;
+    }
+    $limpo = ltrim(trim($caminhoRelativo), '/');
+    $limpo = preg_replace('#^(assets/)?(uploads/)+#', '', $limpo);
+    return $urlBase . '/assets/uploads/' . htmlspecialchars($limpo);
+};
+
+$srcFundo = $montarUrlUpload($fotoFundoSessao);
 
 if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
     $srcFoto = $urlBase . '/assets/img/logo.png';
@@ -50,7 +70,7 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
     $botoes = [
         ['label' => 'Editar Perfil',    'icone' => 'editar-perfil.svg', 'url' => '/perfil/editar'],
         ['label' => 'Alternar Perfil', 'icone' => 'alternar.svg',      'action' => 'abrirModalTrocaPerfil()'],
-        ['label' => 'Termos de Uso',    'icone' => 'termos.svg',        'url' => '/termos'],
+        ['label' => 'Termos de Uso',    'icone' => 'termos.svg',        'action' => 'abrirModalTermos()'],
         ['label' => 'Relatórios',      'icone' => 'relatorios.svg',    'url' => '/admin/relatorios'],
         ['label' => 'Sair',            'icone' => 'sair.svg',          'url' => '/logout'],
     ];
@@ -62,7 +82,8 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
         ['label' => 'Relatórios',       'icone' => 'relatorios.svg',    'url' => '/relatorios'],
         ['label' => 'Gerenciar Animais','icone' => 'patinha.svg',       'url' => '/animal'],
         ['label' => 'Solicitações',     'icone' => 'solicitacoes.svg',  'url' => '/solicitacoes'],
-        ['label' => 'Excluir Conta',    'icone' => 'excluir.svg',       'url' => '/perfil/excluir'],
+        ['label' => 'Termos de Uso',    'icone' => 'termos.svg',        'action' => 'abrirModalTermos()'],
+        ['label' => 'Excluir Conta',    'icone' => 'excluir.svg',       'action' => 'abrirModalExcluirConta()'],
         ['label' => 'Sair',             'icone' => 'sair.svg',          'url' => '/logout'],
         ['label' => 'Denunciar',        'icone' => 'denunciar.svg',     'url' => '/denuncias/nova'],
     ];
@@ -73,7 +94,8 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
     $tituloCabecalho = 'Perfil Incompleto';
     $botoes = [
         ['label' => 'Completar Perfil', 'icone' => 'torne-se.svg', 'url' => '/onboarding'],
-        ['label' => 'Excluir Conta',    'icone' => 'excluir.svg',  'url' => '/perfil/excluir'],
+        ['label' => 'Termos de Uso',    'icone' => 'termos.svg',   'action' => 'abrirModalTermos()'],
+        ['label' => 'Excluir Conta',    'icone' => 'excluir.svg',  'action' => 'abrirModalExcluirConta()'],
         ['label' => 'Sair',             'icone' => 'sair.svg',     'url' => '/logout'],
     ];
 } else {
@@ -82,7 +104,8 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
         ['label' => 'Alternar Perfil',        'icone' => 'alternar.svg',      'action' => 'abrirModalTrocaPerfil()'],
         ['label' => 'Petiscos diários',       'icone' => 'petiscos.svg',      'url' => '/petiscos'],
         ['label' => 'Torne-se uma ONG/Protetor', 'icone' => 'torne-se.svg',   'url' => '/onboarding'],
-        ['label' => 'Excluir Conta',          'icone' => 'excluir.svg',       'url' => '/perfil/excluir'],
+        ['label' => 'Termos de Uso',          'icone' => 'termos.svg',        'action' => 'abrirModalTermos()'],
+        ['label' => 'Excluir Conta',          'icone' => 'excluir.svg',       'action' => 'abrirModalExcluirConta()'],
         ['label' => 'Sair',                   'icone' => 'sair.svg',          'url' => '/logout'],
         ['label' => 'Denunciar',              'icone' => 'denunciar.svg',     'url' => '/denuncias/nova'],
     ];
@@ -94,8 +117,25 @@ $paginasBotoes = array_chunk($botoes, 6);
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
 
 <div class="max-w-md mx-auto bg-background min-h-screen pb-20">
+
+    <?php if (in_array($tipoPerfil, ['ong', 'protetor'], true)): ?>
+        <!-- Mídia de Capa da Página (foto_fundo) -->
+        <div class="relative w-full h-36 sm:h-44 overflow-hidden rounded-b-3xl shadow-sm <?= $srcFundo ? '' : 'bg-gradient-to-r from-roxoApagado to-rosa-2 dark:from-preto2 dark:to-preto3' ?>">
+            <?php if ($srcFundo): ?>
+                <img src="<?= $srcFundo ?>"
+                     alt="Foto de capa"
+                     class="w-full h-full object-cover"
+                     onerror="this.style.display='none';">
+            <?php else: ?>
+                <div class="w-full h-full flex items-center justify-center opacity-40">
+                    <img src="<?= URL_BASE ?>/assets/icons/geral/patinha-coracao.svg" class="h-12 w-12 object-contain" alt="">
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
     <div class="px-6 -mt-4 pt-10 flex flex-col items-center">
-        
+
         <!-- Badge de Perfil Atual (formato de fita/banner, como no protótipo) -->
         <div class="relative flex items-center justify-center mb-6">
             <img src="<?= URL_BASE ?>/assets/icons/geral/patinha-coracao.svg" class="absolute -left-5 z-10 h-10 w-10 object-contain" alt="">
@@ -127,9 +167,19 @@ $paginasBotoes = array_chunk($botoes, 6);
         </div>
 
         <!-- Nome do Usuário -->
-        <h2 class="font-shantell text-2xl font-bold text-text-dark dark:text-white mb-6 text-center">
+        <h2 class="font-shantell text-2xl font-bold text-text-dark dark:text-white text-center <?= $tipoPerfil === 'adotante' ? 'mb-2' : 'mb-6' ?>">
             <?= htmlspecialchars($nomeUsuario) ?>
         </h2>
+
+        <?php if ($tipoPerfil === 'adotante'): ?>
+            <!-- Petiscos Diários -->
+            <div class="flex items-center gap-2 bg-rosa-1/50 dark:bg-preto2 border border-rosa-2 dark:border-preto3 rounded-full px-4 py-1.5 mb-6 shadow-sm">
+                <span class="text-lg">🦴</span>
+                <span class="text-sm font-bold text-text-dark dark:text-white font-poppins">
+                    <?= (int)$petiscosDiarios ?> petiscos diários
+                </span>
+            </div>
+        <?php endif; ?>
 
         <!-- Container de Ações -->
         <div class="w-full bg-gray-200 dark:bg-preto1 rounded-3xl p-5 shadow-inner relative border border-gray-300 dark:border-preto3">
@@ -236,6 +286,74 @@ $paginasBotoes = array_chunk($botoes, 6);
     </div>
 </div>
 
+<!-- Modal Termos de Uso -->
+<div id="modalTermos" class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-surface dark:bg-preto1 rounded-3xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col border border-rosa-3">
+        <div class="flex justify-between items-center p-6 pb-3 border-b border-cinzaMarrom/20">
+            <h3 class="text-xl font-shantell font-bold text-text-dark dark:text-white">Termos de Uso</h3>
+            <button onclick="fecharModalTermos()" class="text-text-muted hover:text-erro text-3xl font-bold transition cursor-pointer">&times;</button>
+        </div>
+
+        <div class="px-6 py-4 overflow-y-auto text-sm font-poppins text-text-dark dark:text-white space-y-4">
+            <p>Bem-vindo(a) ao CãoNectados! Ao utilizar nossa plataforma, você concorda com os termos abaixo.</p>
+
+            <div>
+                <h4 class="font-bold mb-1">1. Objetivo da plataforma</h4>
+                <p class="text-text-muted">O CãoNectados conecta adotantes a ONGs e protetores independentes, facilitando o processo de adoção responsável de animais.</p>
+            </div>
+
+            <div>
+                <h4 class="font-bold mb-1">2. Cadastro e veracidade das informações</h4>
+                <p class="text-text-muted">O usuário é responsável por fornecer informações verdadeiras e manter seus dados atualizados. ONGs e protetores devem comprovar sua identidade e/ou documentação para validação da conta.</p>
+            </div>
+
+            <div>
+                <h4 class="font-bold mb-1">3. Conduta e responsabilidade</h4>
+                <p class="text-text-muted">É proibido o uso da plataforma para maus-tratos, abandono, fraude ou qualquer conduta que prejudique os animais ou outros usuários. Contas podem ser advertidas, suspensas ou excluídas em caso de violação.</p>
+            </div>
+
+            <div>
+                <h4 class="font-bold mb-1">4. Petiscos e solicitações de adoção</h4>
+                <p class="text-text-muted">Adotantes recebem uma quantidade diária de "petiscos", utilizados para demonstrar interesse em animais disponíveis. O envio de um petisco não garante a adoção, que segue critérios do responsável pelo animal.</p>
+            </div>
+
+            <div>
+                <h4 class="font-bold mb-1">5. Privacidade</h4>
+                <p class="text-text-muted">Os dados pessoais informados são utilizados exclusivamente para o funcionamento da plataforma e não são compartilhados com terceiros sem consentimento, exceto quando exigido por lei.</p>
+            </div>
+
+            <div>
+                <h4 class="font-bold mb-1">6. Exclusão de conta</h4>
+                <p class="text-text-muted">O usuário pode solicitar a exclusão de sua conta a qualquer momento através do menu de perfil. A exclusão desativa o acesso e os dados vinculados de acordo com a política de retenção da plataforma.</p>
+            </div>
+        </div>
+
+        <div class="p-6 pt-4">
+            <button type="button" onclick="fecharModalTermos()" class="w-full bg-text-dark hover:opacity-90 dark:bg-primary text-white py-2.5 rounded-xl font-bold text-sm transition cursor-pointer">
+                Entendi
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Confirmar Exclusão de Conta -->
+<div id="modalExcluirConta" class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-surface dark:bg-preto1 rounded-3xl shadow-xl w-full max-w-sm p-6 border border-rosa-3">
+        <div class="flex flex-col items-center text-center">
+            <span class="text-4xl mb-3">⚠️</span>
+            <h3 class="text-xl font-shantell font-bold text-text-dark dark:text-white mb-2">Excluir conta?</h3>
+            <p class="text-sm font-poppins text-text-muted mb-6">
+                Essa ação encerrará sua sessão e desativará sua conta. Você perderá o acesso à plataforma com esse usuário. Deseja continuar?
+            </p>
+        </div>
+
+        <div class="flex gap-3 w-full">
+            <button type="button" onclick="fecharModalExcluirConta()" id="btn-cancelar-exclusao" class="flex-1 bg-cinzaMarrom/30 text-text-dark dark:text-white py-2.5 rounded-xl font-bold text-sm hover:opacity-80 transition cursor-pointer">Cancelar</button>
+            <button type="button" onclick="confirmarExclusaoConta()" id="btn-confirmar-exclusao" class="flex-1 bg-erro text-white py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition cursor-pointer">Sim, excluir</button>
+        </div>
+    </div>
+</div>
+
 <style>
     .hide-scroll::-webkit-scrollbar { display: none; }
     .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
@@ -249,6 +367,58 @@ $paginasBotoes = array_chunk($botoes, 6);
     }
     function fecharModalTrocaPerfil() {
         document.getElementById('modalTrocarPerfil').classList.add('hidden');
+    }
+
+    function abrirModalTermos() {
+        document.getElementById('modalTermos').classList.remove('hidden');
+    }
+    function fecharModalTermos() {
+        document.getElementById('modalTermos').classList.add('hidden');
+    }
+
+    function abrirModalExcluirConta() {
+        document.getElementById('modalExcluirConta').classList.remove('hidden');
+    }
+    function fecharModalExcluirConta() {
+        document.getElementById('modalExcluirConta').classList.add('hidden');
+    }
+
+    async function confirmarExclusaoConta() {
+        const btnConfirmar = document.getElementById('btn-confirmar-exclusao');
+        const btnCancelar = document.getElementById('btn-cancelar-exclusao');
+        btnConfirmar.disabled = true;
+        btnCancelar.disabled = true;
+        btnConfirmar.innerText = 'Excluindo...';
+
+        try {
+            const response = await fetch('<?= $urlBase ?>/perfil/excluir', {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const result = await response.json();
+
+            if (result.status === 'sucesso') {
+                window.location.href = result.redirect_url || '<?= $urlBase ?>/login';
+                return;
+            }
+
+            if (typeof mostrarModalFeedback === 'function') {
+                mostrarModalFeedback('erro', result.mensagem || 'Não foi possível excluir a conta.');
+            } else {
+                alert(result.mensagem || 'Não foi possível excluir a conta.');
+            }
+        } catch (err) {
+            if (typeof mostrarModalFeedback === 'function') {
+                mostrarModalFeedback('erro', 'Erro de conexão com o servidor.');
+            } else {
+                alert('Erro de conexão com o servidor.');
+            }
+        } finally {
+            btnConfirmar.disabled = false;
+            btnCancelar.disabled = false;
+            btnConfirmar.innerText = 'Sim, excluir';
+            fecharModalExcluirConta();
+        }
     }
 
     const slider = document.getElementById('slider-botoes');

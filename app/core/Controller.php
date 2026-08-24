@@ -119,6 +119,7 @@ class Controller
                 '/onboarding/especies-ativas',
                 '/perfil',
                 '/perfil/trocar',
+                '/perfil/excluir',
                 '/raca/json',
                 '/admin/raca/json',
                 '/logout'
@@ -215,6 +216,18 @@ class Controller
         $_SESSION['tipo_perfil']   = $tipoAtual;
         $_SESSION['perfis_ativos'] = $perfisAtivos;
         $_SESSION['status_conta']  = $statusConta;
+
+        // Mantém perfil_ativo.tipo alinhado com tipo_atual do banco a cada requisição.
+        // perfil_ativo só era escrito no login (AuthService::iniciarSessao) e ao trocar de
+        // perfil (PerfilController::alternar) — quem completava o onboarding pela primeira
+        // vez tinha tipo_perfil atualizado corretamente, mas perfil_ativo.tipo continuava
+        // com o valor 'usuario' do login, e perfil.php/editar.php dão prioridade a
+        // perfil_ativo.tipo. Resultado: o perfil aparecia como "incompleto" mesmo depois de
+        // concluído o cadastro de adotante/protetor/ong.
+        $_SESSION['perfil_ativo'] = [
+            'id'   => $usuarioId,
+            'tipo' => $tipoAtual
+        ];
 
         if (in_array($tipoAtual, ['ong', 'protetor'], true)) {
             $protetorRepo = new ProtetorRepository();
