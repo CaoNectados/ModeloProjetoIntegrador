@@ -162,6 +162,36 @@ class RelatorioRepository extends BaseRepository
         ];
     }
 
+    // Usado por: DashboardController::index() — "gráfico" de análise geral do dashboard
+    // admin. Igual a contarAnimaisPorStatus(), mas sem recorte por protetor (visão global).
+    public function contarAnimaisPorStatusGlobal(): array
+    {
+        $sql = "SELECT status, COUNT(*) AS total FROM ANIMAL WHERE deletado_em IS NULL GROUP BY status";
+        $stmt = $this->db->query($sql);
+
+        $contagem = ['disponivel' => 0, 'em_analise' => 0, 'adotado' => 0, 'desativado' => 0];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $linha) {
+            $contagem[$linha['status']] = (int) $linha['total'];
+        }
+
+        return $contagem;
+    }
+
+    // Usado por: DashboardController::index() — card "Adoções Concluídas no Mês". Usa
+    // atualizado_em (data real da mudança de status), pelo mesmo motivo documentado em
+    // calcularTempoMedioAdocaoDias(): é o único campo que o fluxo existente realmente grava.
+    public function contarAdocoesNoPeriodo(?string $dataInicio, ?string $dataFim): int
+    {
+        $params = [];
+        $sql = "SELECT COUNT(*) FROM ANIMAL
+                WHERE status = 'adotado' AND deletado_em IS NULL"
+                . $this->clausulaPeriodo('atualizado_em', $dataInicio, $dataFim, $params);
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (int) $stmt->fetchColumn();
+    }
+
     /**
      * Ranking de ONGs/Protetores: quem cadastrou mais animais e a taxa de sucesso
      * (adotados / cadastrados). Uma única query com LEFT JOIN + GROUP BY + SUM condicional

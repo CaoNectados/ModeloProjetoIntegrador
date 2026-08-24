@@ -129,6 +129,14 @@ class UsuarioRepository extends BaseRepository
         return (int)($res['total'] ?? 0);
     }
 
+    // Usado por: DashboardController::index() — total de usuários ativos exibido no
+    // "gráfico" de análise geral do dashboard admin.
+    public function contarAtivos(): int
+    {
+        $sql = "SELECT COUNT(*) FROM USUARIO WHERE status_conta = 'ativo' AND deletado_em IS NULL";
+        return (int) $this->db->query($sql)->fetchColumn();
+    }
+
     // Usado por: UsuarioAdminService::alterarStatusUsuario() e alterarStatusPerfil() (proteção contra remover o último admin)
     public function contarAdminsAtivos(): int
     {

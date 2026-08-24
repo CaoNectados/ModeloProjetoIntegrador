@@ -116,6 +116,9 @@ $router->get('/admin/dashboard', 'admin/DashboardController@index');
 $router->get('/admin/relatorios', 'admin/RelatorioController@index');
 $router->get('/admin/relatorios/exportar-csv', 'admin/RelatorioController@exportarCsv');
 
+// Denúncias (listagem básica — fluxo de moderação ainda não implementado)
+$router->get('/admin/denuncias', 'admin/DenunciaController@index');
+
 // Solicitações de Cadastro (ONGs e Protetores)
 $router->get('/admin/solicitacoes', 'admin\SolicitacaoProtetorController@index');
 $router->get('/admin/solicitacoes/detalhes', 'admin\SolicitacaoProtetorController@detalhes');

@@ -18,6 +18,15 @@ class ProtetorRepository extends BaseRepository
         return $this->db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    // Usado por: DashboardController::index() — card "Cadastros Pendentes". Mesmo critério de
+    // ProtetorRepository::listarSolicitacoes('pendentes'), mas como COUNT direto (sem trazer
+    // colunas/joins desnecessários só pra contar).
+    public function contarPendentes(): int
+    {
+        $sql = "SELECT COUNT(*) FROM PROTETOR WHERE validado = 0 AND deletado_em IS NULL";
+        return (int) $this->db->query($sql)->fetchColumn();
+    }
+
     // Usado por: AnimalController, PerfilController, OnBoardingService, AuthService, UsuarioAdminService e PerfilService
     public function buscarPorUsuarioId(int $usuarioId): ?array
     {
