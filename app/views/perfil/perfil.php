@@ -264,7 +264,15 @@ $paginasBotoes = array_chunk($botoes, 6);
             <?php
             // O pseudo-perfil "usuario" (estado transitório pré-onboarding) nunca é uma
             // opção real de navegação — filtrado da listagem de troca de perfil.
-            $perfis = array_values(array_filter($_SESSION['perfis'] ?? [], fn($p) => ($p['tipo'] ?? '') !== 'usuario'));
+            //
+            // Lê de perfis_ativos (refrescado do banco a cada requisição autenticada em
+            // Controller::sincronizarSessaoComBanco()), não de $_SESSION['perfis'] — esse
+            // último só é montado uma vez, no login (AuthService::iniciarSessao), e nunca
+            // mais é atualizado depois. Um perfil concedido durante a sessão (ex: RF 20 —
+            // virar Protetor/ONG ou Adotante sem precisar logar de novo) nunca aparecia
+            // aqui pra trocar, mesmo já valendo pra tudo mais no sistema.
+            $perfis = array_values(array_filter($_SESSION['perfis_ativos'] ?? [], fn($tipo) => $tipo !== 'usuario'));
+            $perfis = array_map(fn($tipo) => ['tipo' => $tipo], $perfis);
             if (!empty($perfis)):
                 foreach ($perfis as $p):
                     $isCurrent = (isset($_SESSION['perfil_ativo']['tipo']) && $_SESSION['perfil_ativo']['tipo'] === $p['tipo']);
