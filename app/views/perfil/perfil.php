@@ -102,7 +102,7 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
     $botoes = [
         ['label' => 'Editar Perfil',          'icone' => 'editar-perfil.svg', 'url' => '/perfil/editar'],
         ['label' => 'Alternar Perfil',        'icone' => 'alternar.svg',      'action' => 'abrirModalTrocaPerfil()'],
-        ['label' => 'Petiscos diários',       'icone' => 'petiscos.svg',      'url' => '/petiscos'],
+        ['label' => 'Petiscos diários',       'icone' => 'petiscos.svg',      'url' => '/petiscos', 'valor' => (int)$petiscosDiarios],
         ['label' => 'Torne-se uma ONG/Protetor', 'icone' => 'torne-se.svg',   'url' => '/onboarding'],
         ['label' => 'Termos de Uso',          'icone' => 'termos.svg',        'action' => 'abrirModalTermos()'],
         ['label' => 'Excluir Conta',          'icone' => 'excluir.svg',       'action' => 'abrirModalExcluirConta()'],
@@ -167,19 +167,9 @@ $paginasBotoes = array_chunk($botoes, 6);
         </div>
 
         <!-- Nome do Usuário -->
-        <h2 class="font-shantell text-2xl font-bold text-text-dark dark:text-white text-center <?= $tipoPerfil === 'adotante' ? 'mb-2' : 'mb-6' ?>">
+        <h2 class="font-shantell text-2xl font-bold text-text-dark dark:text-white text-center mb-6">
             <?= htmlspecialchars($nomeUsuario) ?>
         </h2>
-
-        <?php if ($tipoPerfil === 'adotante'): ?>
-            <!-- Petiscos Diários -->
-            <div class="flex items-center gap-2 bg-rosa-1/50 dark:bg-preto2 border border-rosa-2 dark:border-preto3 rounded-full px-4 py-1.5 mb-6 shadow-sm">
-                <span class="text-lg">🦴</span>
-                <span class="text-sm font-bold text-text-dark dark:text-white font-poppins">
-                    <?= (int)$petiscosDiarios ?> petiscos diários
-                </span>
-            </div>
-        <?php endif; ?>
 
         <!-- Container de Ações -->
         <div class="w-full bg-gray-200 dark:bg-preto1 rounded-3xl p-5 shadow-inner relative border border-gray-300 dark:border-preto3">
@@ -196,11 +186,17 @@ $paginasBotoes = array_chunk($botoes, 6);
                             <?php if (isset($botao['action'])): ?>
                                 <button type="button" onclick="<?= htmlspecialchars($botao['action']) ?>" class="flex flex-col items-center justify-center bg-branco dark:bg-preto2 rounded-2xl p-3 shadow-sm hover:shadow-md transition text-center h-28 cursor-pointer border border-rosa-2 dark:border-preto3 w-full">
                                     <img src="<?= $urlBase ?>/assets/icons/perfil/<?= $botao['icone'] ?>" alt="<?= htmlspecialchars($botao['label']) ?>" class="h-11 w-11 mb-2 object-contain">
+                                    <?php if (isset($botao['valor'])): ?>
+                                        <span class="text-sm font-bold leading-none text-primary dark:text-roxinhoFofo mb-0.5"><?= (int)$botao['valor'] ?></span>
+                                    <?php endif; ?>
                                     <span class="text-xs font-bold leading-tight text-text-dark dark:text-white"><?= htmlspecialchars($botao['label']) ?></span>
                                 </button>
                             <?php else: ?>
                                 <a href="<?= $urlBase . $botao['url'] ?>" class="flex flex-col items-center justify-center bg-branco dark:bg-preto2 rounded-2xl p-3 shadow-sm hover:shadow-md transition text-center h-28 border border-rosa-2 dark:border-preto3">
                                     <img src="<?= $urlBase ?>/assets/icons/perfil/<?= $botao['icone'] ?>" alt="<?= htmlspecialchars($botao['label']) ?>" class="h-11 w-11 mb-2 object-contain">
+                                    <?php if (isset($botao['valor'])): ?>
+                                        <span class="text-sm font-bold leading-none text-primary dark:text-roxinhoFofo mb-0.5"><?= (int)$botao['valor'] ?></span>
+                                    <?php endif; ?>
                                     <span class="text-xs font-bold leading-tight text-text-dark dark:text-white"><?= htmlspecialchars($botao['label']) ?></span>
                                 </a>
                             <?php endif; ?>
