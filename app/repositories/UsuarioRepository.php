@@ -292,6 +292,35 @@ class UsuarioRepository extends BaseRepository
         return $stmt->execute([':status' => $novoStatus, ':id' => $usuarioId]);
     }
 
+    // Usado por: OnboardingService::restaurarPerfilAtivoOriginal() (RF 20 - upgrade cruzado
+    // entre Adotante e Protetor/ONG). Restaura nome/telefone/endereço/data de nascimento que o
+    // onboarding do NOVO perfil solicitado tenha sobrescrito em USUARIO — linha única,
+    // compartilhada entre todos os perfis da mesma pessoa. Diferente de atualizarDadosPerfil()
+    // (usada na edição normal de perfil), esta também cobre dt_nasc, que o onboarding de
+    // protetor/ong grava e que atualizarDadosPerfil() não gerencia.
+    public function restaurarDadosPessoais(int $usuarioId, string $nome, ?string $telefone, ?int $regiaoId, string $logradouro, string $numero, ?string $dtNasc): bool
+    {
+        $sql = "UPDATE USUARIO
+                SET nome = :nome,
+                    telefone = :telefone,
+                    regiao_id = :regiao_id,
+                    logradouro = :logradouro,
+                    numero = :numero,
+                    dt_nasc = :dt_nasc
+                WHERE usuario_id = :usuario_id";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->bindValue(':nome', $nome, PDO::PARAM_STR);
+        $stmt->bindValue(':telefone', $telefone, $telefone ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':regiao_id', $regiaoId, $regiaoId ? PDO::PARAM_INT : PDO::PARAM_NULL);
+        $stmt->bindValue(':logradouro', $logradouro, PDO::PARAM_STR);
+        $stmt->bindValue(':numero', $numero, PDO::PARAM_STR);
+        $stmt->bindValue(':dt_nasc', $dtNasc, $dtNasc ? PDO::PARAM_STR : PDO::PARAM_NULL);
+        $stmt->bindValue(':usuario_id', $usuarioId, PDO::PARAM_INT);
+
+        return $stmt->execute();
+    }
+
     // Usado por: PerfilController::excluir() (soft delete da conta pelo próprio usuário)
     public function excluirConta(int $usuarioId): bool
     {

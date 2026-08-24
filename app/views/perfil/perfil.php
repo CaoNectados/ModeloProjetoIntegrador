@@ -5,8 +5,10 @@ $tipoPerfil = $_SESSION['perfil_ativo']['tipo'] ?? $_SESSION['tipo_perfil'] ?? '
 $nomeUsuario = $_SESSION['usuario']['nome'] ?? $_SESSION['usuario_nome'] ?? 'Nome de Usuário';
 
 $fotoPerfilSessao = $_SESSION['foto_perfil'] ?? null;
-$fotoFundoSessao = null;
 $petiscosDiarios = null;
+
+$statusSolicitacaoProtetor = null; // null = nunca solicitou virar Protetor/ONG
+$tipoSolicitacaoProtetor = null;   // 'protetor' (cpf) ou 'ong' (cnpj), pra rotular a mensagem
 
 if ($tipoPerfil === 'adotante') {
     $adotanteInfo = (new \app\repositories\AdotanteRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
@@ -14,6 +16,20 @@ if ($tipoPerfil === 'adotante') {
         $fotoPerfilSessao = $adotanteInfo['foto_perfil'] ?? null;
     }
     $petiscosDiarios = isset($adotanteInfo['petiscos_diarios']) ? (int)$adotanteInfo['petiscos_diarios'] : 10;
+
+    // RF 20: status da solicitação de upgrade para Protetor/ONG (se houver). Reaproveita os
+    // mesmos campos (validado/deletado_em) já usados pelo admin em /admin/solicitacoes.
+    $solicitacaoProtetor = (new \app\repositories\ProtetorRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
+    if ($solicitacaoProtetor) {
+        $tipoSolicitacaoProtetor = (strtolower($solicitacaoProtetor['tipo_documento'] ?? 'cpf') === 'cnpj') ? 'ONG' : 'Protetor';
+        if (!empty($solicitacaoProtetor['deletado_em'])) {
+            $statusSolicitacaoProtetor = 'recusada';
+        } elseif (!empty($solicitacaoProtetor['validado'])) {
+            $statusSolicitacaoProtetor = 'aprovada';
+        } else {
+            $statusSolicitacaoProtetor = 'pendente';
+        }
+    }
 } elseif (in_array($tipoPerfil, ['protetor', 'ong'], true)) {
     $protetorInfo = (new \app\repositories\ProtetorRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']);
     if ($protetorInfo) {
@@ -21,25 +37,14 @@ if ($tipoPerfil === 'adotante') {
         if (empty($fotoPerfilSessao)) {
             $fotoPerfilSessao = $paginaInfo['foto_perfil'] ?? null;
         }
-        $fotoFundoSessao = $paginaInfo['foto_fundo'] ?? null;
     }
+
+    // RF 20 (inverso): Protetor/ONG ainda sem perfil de Adotante pode solicitar um.
+    $jaEhAdotante = (new \app\repositories\AdotanteRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']) !== null;
     // 'usuario' (sem nenhum perfil ativo) e 'administrador' caem no placeholder padrão abaixo.
 }
 
 $urlBase = defined('URL_BASE') ? rtrim(URL_BASE, '/') : '';
-
-// Monta a URL pública (assets/uploads/...) a partir de um caminho relativo salvo no banco,
-// aplicando a mesma limpeza de prefixo usada para a foto de perfil logo abaixo.
-$montarUrlUpload = function (?string $caminhoRelativo) use ($urlBase): ?string {
-    if (empty($caminhoRelativo)) {
-        return null;
-    }
-    $limpo = ltrim(trim($caminhoRelativo), '/');
-    $limpo = preg_replace('#^(assets/)?(uploads/)+#', '', $limpo);
-    return $urlBase . '/assets/uploads/' . htmlspecialchars($limpo);
-};
-
-$srcFundo = $montarUrlUpload($fotoFundoSessao);
 
 if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
     $srcFoto = $urlBase . '/assets/img/logo.png';
@@ -87,6 +92,12 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
         ['label' => 'Sair',             'icone' => 'sair.svg',          'url' => '/logout'],
         ['label' => 'Denunciar',        'icone' => 'denunciar.svg',     'url' => '/denuncias/nova'],
     ];
+
+    // RF 20 (inverso): sem aprovação envolvida (Adotante não passa por validação), então o
+    // botão só some quando a pessoa já tem o perfil de Adotante.
+    if (!$jaEhAdotante) {
+        $botoes[] = ['label' => 'Torne-se Adotante', 'icone' => 'torne-se.svg', 'url' => '/onboarding/adotante'];
+    }
 } elseif ($tipoPerfil === 'usuario') {
     // Sem nenhum perfil ativo (ex: admin desativou todos os perfis da pessoa, ou ela nunca
     // completou o onboarding). Não existe um Adotante/Protetor "de verdade" pra editar ou
@@ -103,12 +114,21 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
         ['label' => 'Editar Perfil',          'icone' => 'editar-perfil.svg', 'url' => '/perfil/editar'],
         ['label' => 'Alternar Perfil',        'icone' => 'alternar.svg',      'action' => 'abrirModalTrocaPerfil()'],
         ['label' => 'Petiscos diários',       'icone' => 'petiscos.svg',      'url' => '/petiscos', 'valor' => (int)$petiscosDiarios],
-        ['label' => 'Torne-se uma ONG/Protetor', 'icone' => 'torne-se.svg',   'url' => '/onboarding'],
         ['label' => 'Termos de Uso',          'icone' => 'termos.svg',        'action' => 'abrirModalTermos()'],
         ['label' => 'Excluir Conta',          'icone' => 'excluir.svg',       'action' => 'abrirModalExcluirConta()'],
         ['label' => 'Sair',                   'icone' => 'sair.svg',          'url' => '/logout'],
         ['label' => 'Denunciar',              'icone' => 'denunciar.svg',     'url' => '/denuncias/nova'],
     ];
+
+    // RF 20: "Torne-se Protetor/ONG" só aparece como botão clicável quando ainda não há
+    // solicitação em andamento ou quando ela foi recusada (reenvio). Pendente vira um aviso
+    // informativo (ver banner logo abaixo do nome); aprovada não mostra nada aqui (o aviso
+    // de aprovação é uma notificação, não um card no perfil) — só some o botão.
+    if ($statusSolicitacaoProtetor === null) {
+        $botoes[] = ['label' => 'Torne-se Protetor/ONG', 'icone' => 'torne-se.svg', 'url' => '/onboarding'];
+    } elseif ($statusSolicitacaoProtetor === 'recusada') {
+        $botoes[] = ['label' => 'Reenviar Solicitação', 'icone' => 'torne-se.svg', 'url' => '/onboarding'];
+    }
 }
 
 $paginasBotoes = array_chunk($botoes, 6);
@@ -117,23 +137,6 @@ $paginasBotoes = array_chunk($botoes, 6);
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
 
 <div class="max-w-md mx-auto bg-background min-h-screen pb-20">
-
-    <?php if (in_array($tipoPerfil, ['ong', 'protetor'], true)): ?>
-        <!-- Mídia de Capa da Página (foto_fundo) -->
-        <div class="relative w-full h-36 sm:h-44 overflow-hidden rounded-b-3xl shadow-sm <?= $srcFundo ? '' : 'bg-gradient-to-r from-roxoApagado to-rosa-2 dark:from-preto2 dark:to-preto3' ?>">
-            <?php if ($srcFundo): ?>
-                <img src="<?= $srcFundo ?>"
-                     alt="Foto de capa"
-                     class="w-full h-full object-cover"
-                     onerror="this.style.display='none';">
-            <?php else: ?>
-                <div class="w-full h-full flex items-center justify-center opacity-40">
-                    <img src="<?= URL_BASE ?>/assets/icons/geral/patinha-coracao.svg" class="h-12 w-12 object-contain" alt="">
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
     <div class="px-6 -mt-4 pt-10 flex flex-col items-center">
 
         <!-- Badge de Perfil Atual (formato de fita/banner, como no protótipo) -->
@@ -170,6 +173,32 @@ $paginasBotoes = array_chunk($botoes, 6);
         <h2 class="font-shantell text-2xl font-bold text-text-dark dark:text-white text-center mb-6">
             <?= htmlspecialchars($nomeUsuario) ?>
         </h2>
+
+        <?php if ($statusSolicitacaoProtetor !== null): ?>
+            <!-- RF 20: Status da solicitação de upgrade para Protetor/ONG -->
+            <?php
+                $bannerConfig = [
+                    'pendente' => [
+                        'classes' => 'bg-amarelo/30 dark:bg-preto2 border-amarelo/60 text-text-dark',
+                        'icone'   => '🕓',
+                        'texto'   => "Sua solicitação para se tornar {$tipoSolicitacaoProtetor} está em análise (pendente).",
+                    ],
+                    'recusada' => [
+                        'classes' => 'bg-erro/10 border-erro/30 text-erro',
+                        'icone'   => '❌',
+                        'texto'   => "Sua solicitação para se tornar {$tipoSolicitacaoProtetor} foi recusada. Verifique seu e-mail para mais detalhes e reenvie os dados corrigidos.",
+                    ],
+                    // 'aprovada' não tem banner aqui — o aviso de aprovação vai virar uma
+                    // notificação (sistema de notificações), não um card fixo no perfil.
+                ][$statusSolicitacaoProtetor] ?? null;
+            ?>
+            <?php if ($bannerConfig): ?>
+                <div class="w-full flex items-start gap-2 rounded-2xl border px-4 py-3 mb-6 text-sm font-poppins font-medium <?= $bannerConfig['classes'] ?>">
+                    <span class="text-lg leading-none"><?= $bannerConfig['icone'] ?></span>
+                    <span class="text-text-dark dark:text-white"><?= htmlspecialchars($bannerConfig['texto']) ?></span>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
 
         <!-- Container de Ações -->
         <div class="w-full bg-gray-200 dark:bg-preto1 rounded-3xl p-5 shadow-inner relative border border-gray-300 dark:border-preto3">
@@ -233,7 +262,15 @@ $paginasBotoes = array_chunk($botoes, 6);
             <?php
             // O pseudo-perfil "usuario" (estado transitório pré-onboarding) nunca é uma
             // opção real de navegação — filtrado da listagem de troca de perfil.
-            $perfis = array_values(array_filter($_SESSION['perfis'] ?? [], fn($p) => ($p['tipo'] ?? '') !== 'usuario'));
+            //
+            // Lê de perfis_ativos (refrescado do banco a cada requisição autenticada em
+            // Controller::sincronizarSessaoComBanco()), não de $_SESSION['perfis'] — esse
+            // último só é montado uma vez, no login (AuthService::iniciarSessao), e nunca
+            // mais é atualizado depois. Um perfil concedido durante a sessão (ex: RF 20 —
+            // virar Protetor/ONG ou Adotante sem precisar logar de novo) nunca aparecia
+            // aqui pra trocar, mesmo já valendo pra tudo mais no sistema.
+            $perfis = array_values(array_filter($_SESSION['perfis_ativos'] ?? [], fn($tipo) => $tipo !== 'usuario'));
+            $perfis = array_map(fn($tipo) => ['tipo' => $tipo], $perfis);
             if (!empty($perfis)):
                 foreach ($perfis as $p):
                     $isCurrent = (isset($_SESSION['perfil_ativo']['tipo']) && $_SESSION['perfil_ativo']['tipo'] === $p['tipo']);

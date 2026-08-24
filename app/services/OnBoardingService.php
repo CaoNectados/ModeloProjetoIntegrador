@@ -86,6 +86,66 @@ class OnboardingService
         return false;
     }
 
+    // Usado por: OnBoardingController::verificarSeJaPossuiPerfil() e PerfilController (RF 20 -
+    // status da solicitação de upgrade de Adotante para Protetor/ONG). Reaproveita
+    // ProtetorRepository::buscarPorUsuarioId(), que já traz sempre a solicitação mais recente
+    // (ORDER BY protetor_id DESC), cobrindo naturalmente o caso de reenvio após recusa.
+    public function obterSolicitacaoProtetorAtual(int $usuarioId): ?array
+    {
+        return $this->protetorRepo->buscarPorUsuarioId($usuarioId);
+    }
+
+    // Usado por: OnBoardingController::salvarProtetor() e salvarAdotante() (RF 20 - upgrade
+    // cruzado entre Adotante e Protetor/ONG, nos dois sentidos). Os métodos processarOng() e
+    // processarAdotante() são 100% reaproveitados do fluxo original e, por isso, sempre
+    // promovem tipo_atual/sessão para o perfil recém-cadastrado — o que é o comportamento
+    // certo para quem está se cadastrando pela primeira vez, mas não para quem já tinha um
+    // outro perfil ativo e só está solicitando um perfil adicional. Este método corrige o
+    // estado logo em seguida: devolve a pessoa pro perfil que já estava ativo antes da
+    // solicitação (e os dados pessoais compartilhados em USUARIO que o onboarding do novo
+    // perfil tenha sobrescrito), deixando o perfil novo disponível via "Alternar Perfil".
+    public function restaurarPerfilAtivoOriginal(int $usuarioId, array $usuarioOriginal, string $tipoOriginal): void
+    {
+        $this->usuarioRepo->restaurarDadosPessoais(
+            $usuarioId,
+            (string)($usuarioOriginal['nome'] ?? ''),
+            $usuarioOriginal['telefone'] ?? null,
+            isset($usuarioOriginal['regiao_id']) ? (int)$usuarioOriginal['regiao_id'] : null,
+            (string)($usuarioOriginal['logradouro'] ?? ''),
+            (string)($usuarioOriginal['numero'] ?? ''),
+            $usuarioOriginal['dt_nasc'] ?? null
+        );
+
+        $this->usuarioRepo->atualizarTipoAtual($usuarioId, $tipoOriginal);
+
+        if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
+        $_SESSION['tipo_perfil']  = $tipoOriginal;
+        $_SESSION['usuario_nome'] = $usuarioOriginal['nome'] ?? ($_SESSION['usuario_nome'] ?? '');
+        $_SESSION['recusado']     = false;
+        $_SESSION['perfil_ativo'] = [
+            'id'   => $usuarioId,
+            'tipo' => $tipoOriginal
+        ];
+
+        if (in_array($tipoOriginal, ['protetor', 'ong'], true)) {
+            $protetor = $this->protetorRepo->buscarPorUsuarioId($usuarioId);
+            $_SESSION['protetor_id'] = $protetor ? (int)$protetor['protetor_id'] : null;
+            $_SESSION['validado']    = $protetor ? (bool)$protetor['validado'] : false;
+        } else {
+            $adotante = $this->adotanteRepo->buscarPorUsuarioId($usuarioId);
+            $_SESSION['adotante_id'] = $adotante['adotante_id'] ?? null;
+            $_SESSION['validado']    = true;
+        }
+    }
+
+    // Usado por: OnBoardingController::verificarSeJaPossuiPerfil() (RF 20 inverso - impede que
+    // um Protetor/ONG que já tem perfil de Adotante reabra o formulário de cadastro de novo)
+    public function possuiPerfilAdotante(int $usuarioId): bool
+    {
+        return $this->adotanteRepo->buscarPorUsuarioId($usuarioId) !== null;
+    }
+
     // Usado por: OnBoardingController (pré-preenchimento do formulário de protetor/ONG)
     public function obterDadosPreenchidosProtetor(int $usuarioId): ?array
     {

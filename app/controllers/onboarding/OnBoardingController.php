@@ -6,6 +6,7 @@ use app\core\Controller;
 use app\services\OnboardingService;
 use app\repositories\RegiaoRepository;
 use app\repositories\EspecieRepository;
+use app\repositories\UsuarioRepository;
 use app\services\ValidationService;
 use Exception;
 
@@ -14,12 +15,14 @@ class OnboardingController extends Controller
     private OnboardingService $onboardingService;
     private RegiaoRepository $regiaoRepo;
     private EspecieRepository $especieRepo;
+    private UsuarioRepository $usuarioRepo;
 
     public function __construct()
     {
         $this->onboardingService = new OnboardingService();
         $this->regiaoRepo = new RegiaoRepository();
         $this->especieRepo = new EspecieRepository();
+        $this->usuarioRepo = new UsuarioRepository();
 
         $this->autenticacaoRequired();
         $this->verificarSeJaPossuiPerfil();
@@ -47,7 +50,8 @@ class OnboardingController extends Controller
         ]);
     }
 
-    // Usado por: rota POST /onboarding/salvar-adotante
+    // Usado por: rota POST /onboarding/salvar-adotante (fluxo original de cadastro, e
+    // RF 20 inverso - upgrade de Protetor/ONG para Adotante)
     public function salvarAdotante(): void
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -57,12 +61,28 @@ class OnboardingController extends Controller
                     throw new Exception("Sessão expirada. Faça login novamente.");
                 }
 
+                // RF 20 inverso: quem já é Protetor/ONG está pedindo um perfil ADICIONAL de
+                // Adotante. Diferente do outro sentido, não existe aprovação aqui (Adotante
+                // não passa por validação), mas o onboarding continua sobrescrevendo dados
+                // pessoais compartilhados em USUARIO — precisa restaurar do mesmo jeito.
+                $tipoAnterior = $_SESSION['tipo_perfil'] ?? 'usuario';
+                $ehUpgradeDeProtetorOuOng = in_array($tipoAnterior, ['protetor', 'ong'], true);
+                $usuarioOriginal = $ehUpgradeDeProtetorOuOng
+                    ? $this->usuarioRepo->buscarPorId((int)$usuarioId)
+                    : null;
+
                 $dadosLimpos = ValidationService::sanitizarArray($_POST);
                 $this->onboardingService->processarAdotante($dadosLimpos, $_FILES, (int)$usuarioId);
 
+                if ($ehUpgradeDeProtetorOuOng && $usuarioOriginal) {
+                    $this->onboardingService->restaurarPerfilAtivoOriginal((int)$usuarioId, $usuarioOriginal, $tipoAnterior);
+                }
+
                 $this->json(200, [
                     'status'       => 'sucesso',
-                    'mensagem'     => 'Perfil de adotante criado com sucesso!',
+                    'mensagem'     => $ehUpgradeDeProtetorOuOng
+                        ? 'Perfil de Adotante criado com sucesso! Use "Alternar Perfil" para acessá-lo.'
+                        : 'Perfil de adotante criado com sucesso!',
                     // TODO: trocar para '/feed' quando o Feed voltar a ser implementado.
                     'redirect_url' => URL_BASE . '/perfil'
                 ]);
@@ -107,7 +127,8 @@ class OnboardingController extends Controller
         ]);
     }
 
-    // Usado por: rota POST /onboarding/salvar-protetor (fluxo de ONG e de Protetor)
+    // Usado por: rota POST /onboarding/salvar-protetor (fluxo de ONG e de Protetor, e
+    // RF 20 - upgrade de Adotante para Protetor/ONG)
     public function salvarProtetor(): void
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -117,13 +138,27 @@ class OnboardingController extends Controller
                     throw new Exception("Sessão expirada. Faça login novamente.");
                 }
 
+                // RF 20: quem já é Adotante (perfil ativo antes desta requisição) está pedindo
+                // um perfil ADICIONAL de Protetor/ONG, não se cadastrando do zero. Precisa
+                // continuar navegando como Adotante enquanto a solicitação está pendente.
+                $ehUpgradeDeAdotante = ($_SESSION['tipo_perfil'] ?? 'usuario') === 'adotante';
+                $usuarioOriginal = $ehUpgradeDeAdotante
+                    ? $this->usuarioRepo->buscarPorId((int)$usuarioId)
+                    : null;
+
                 $dadosLimpos = ValidationService::sanitizarArray($_POST);
                 $this->onboardingService->processarOng($dadosLimpos, $_FILES, (int)$usuarioId);
 
+                if ($ehUpgradeDeAdotante && $usuarioOriginal) {
+                    $this->onboardingService->restaurarPerfilAtivoOriginal((int)$usuarioId, $usuarioOriginal, 'adotante');
+                }
+
                 $this->json(200, [
                     'status'       => 'sucesso',
-                    'mensagem'     => 'Solicitação enviada para análise com sucesso!',
-                    'redirect_url' => URL_BASE . '/aguardando-aprovacao'
+                    'mensagem'     => $ehUpgradeDeAdotante
+                        ? 'Solicitação para se tornar Protetor/ONG enviada! Acompanhe o status no seu perfil.'
+                        : 'Solicitação enviada para análise com sucesso!',
+                    'redirect_url' => URL_BASE . ($ehUpgradeDeAdotante ? '/perfil' : '/aguardando-aprovacao')
                 ]);
             } catch (Exception $e) {
                 $this->json(200, [
@@ -239,6 +274,71 @@ class OnboardingController extends Controller
 
             $this->redirect('/aguardando-aprovacao');
             return;
+        }
+
+        // RF 20: Adotante pedindo upgrade para Protetor/ONG. Reaproveita as mesmas rotas/views
+        // do onboarding original (seleção de perfil, formulários de protetor/ong e o
+        // submit) — a diferença fica só na resposta do controller (ver salvarProtetor()),
+        // que mantém a pessoa como Adotante enquanto a solicitação está pendente.
+        if ($tipoPerfil === 'adotante') {
+            $rotasUpgradeProtetor = [
+                '/onboarding',
+                '/onboarding/ong',
+                '/onboarding/protetor',
+                '/onboarding/salvar-protetor'
+            ];
+
+            if (in_array($uriAtual, $rotasUpgradeProtetor, true)) {
+                $statusConta = $_SESSION['status_conta'] ?? 'pendente';
+                if ($statusConta !== 'ativo') {
+                    $this->redirecionarComMensagem('erro', 'Sua conta ainda não está verificada para solicitar o perfil de Protetor/ONG.', '/perfil');
+                    return;
+                }
+
+                $solicitacaoAtual = $this->onboardingService->obterSolicitacaoProtetorAtual((int)$usuarioId);
+
+                // Pendente: já existe solicitação aguardando análise, não deixa abrir o
+                // formulário de novo (evitaria duplicar/perder o comprovante já enviado).
+                if ($solicitacaoAtual && empty($solicitacaoAtual['deletado_em']) && empty($solicitacaoAtual['validado'])) {
+                    $this->redirecionarComMensagem('aviso', 'Você já tem uma solicitação de Protetor/ONG em análise.', '/perfil');
+                    return;
+                }
+
+                // Aprovada: não faz sentido reabrir o formulário, já pode trocar de perfil.
+                if ($solicitacaoAtual && !empty($solicitacaoAtual['validado'])) {
+                    $this->redirecionarComMensagem('sucesso', 'Sua solicitação de Protetor/ONG já foi aprovada! Use "Alternar Perfil" para acessá-lo.', '/perfil');
+                    return;
+                }
+
+                // Sem solicitação ainda, ou recusada (reenvio): libera o formulário.
+                return;
+            }
+        }
+
+        // RF 20 (inverso): Protetor/ONG já validado pedindo também um perfil de Adotante.
+        // Sem aprovação envolvida (Adotante não passa por validação), então basta checar se a
+        // pessoa já tem esse perfil. Reaproveita a mesma view/formulário do onboarding original.
+        if (in_array($tipoPerfil, ['protetor', 'ong'], true)) {
+            $rotasUpgradeAdotante = [
+                '/onboarding',
+                '/onboarding/adotante',
+                '/onboarding/salvar-adotante'
+            ];
+
+            if (in_array($uriAtual, $rotasUpgradeAdotante, true)) {
+                $statusConta = $_SESSION['status_conta'] ?? 'pendente';
+                if ($statusConta !== 'ativo') {
+                    $this->redirecionarComMensagem('erro', 'Sua conta ainda não está verificada para solicitar o perfil de Adotante.', '/perfil');
+                    return;
+                }
+
+                if ($this->onboardingService->possuiPerfilAdotante((int)$usuarioId)) {
+                    $this->redirecionarComMensagem('aviso', 'Você já tem um perfil de Adotante.', '/perfil');
+                    return;
+                }
+
+                return;
+            }
         }
 
         // Onboarding concluído (adotante, ou protetor/ong já validado): as rotas de
