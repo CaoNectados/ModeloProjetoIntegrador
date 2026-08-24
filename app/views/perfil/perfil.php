@@ -121,8 +121,9 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
     ];
 
     // RF 20: "Torne-se Protetor/ONG" só aparece como botão clicável quando ainda não há
-    // solicitação em andamento ou quando ela foi recusada (reenvio). Pendente/aprovada
-    // viram um aviso informativo (ver banner logo abaixo do nome), sem link de ação.
+    // solicitação em andamento ou quando ela foi recusada (reenvio). Pendente vira um aviso
+    // informativo (ver banner logo abaixo do nome); aprovada não mostra nada aqui (o aviso
+    // de aprovação é uma notificação, não um card no perfil) — só some o botão.
     if ($statusSolicitacaoProtetor === null) {
         $botoes[] = ['label' => 'Torne-se Protetor/ONG', 'icone' => 'torne-se.svg', 'url' => '/onboarding'];
     } elseif ($statusSolicitacaoProtetor === 'recusada') {
@@ -187,11 +188,8 @@ $paginasBotoes = array_chunk($botoes, 6);
                         'icone'   => '❌',
                         'texto'   => "Sua solicitação para se tornar {$tipoSolicitacaoProtetor} foi recusada. Verifique seu e-mail para mais detalhes e reenvie os dados corrigidos.",
                     ],
-                    'aprovada' => [
-                        'classes' => 'bg-sucesso/10 border-sucesso/30 text-sucesso',
-                        'icone'   => '✅',
-                        'texto'   => "Sua solicitação foi aprovada! Toque em \"Alternar Perfil\" para acessar seu perfil de {$tipoSolicitacaoProtetor}.",
-                    ],
+                    // 'aprovada' não tem banner aqui — o aviso de aprovação vai virar uma
+                    // notificação (sistema de notificações), não um card fixo no perfil.
                 ][$statusSolicitacaoProtetor] ?? null;
             ?>
             <?php if ($bannerConfig): ?>
