@@ -5,7 +5,6 @@ $tipoPerfil = $_SESSION['perfil_ativo']['tipo'] ?? $_SESSION['tipo_perfil'] ?? '
 $nomeUsuario = $_SESSION['usuario']['nome'] ?? $_SESSION['usuario_nome'] ?? 'Nome de Usuário';
 
 $fotoPerfilSessao = $_SESSION['foto_perfil'] ?? null;
-$fotoFundoSessao = null;
 $petiscosDiarios = null;
 
 $statusSolicitacaoProtetor = null; // null = nunca solicitou virar Protetor/ONG
@@ -38,25 +37,14 @@ if ($tipoPerfil === 'adotante') {
         if (empty($fotoPerfilSessao)) {
             $fotoPerfilSessao = $paginaInfo['foto_perfil'] ?? null;
         }
-        $fotoFundoSessao = $paginaInfo['foto_fundo'] ?? null;
     }
+
+    // RF 20 (inverso): Protetor/ONG ainda sem perfil de Adotante pode solicitar um.
+    $jaEhAdotante = (new \app\repositories\AdotanteRepository())->buscarPorUsuarioId((int)$_SESSION['usuario_id']) !== null;
     // 'usuario' (sem nenhum perfil ativo) e 'administrador' caem no placeholder padrão abaixo.
 }
 
 $urlBase = defined('URL_BASE') ? rtrim(URL_BASE, '/') : '';
-
-// Monta a URL pública (assets/uploads/...) a partir de um caminho relativo salvo no banco,
-// aplicando a mesma limpeza de prefixo usada para a foto de perfil logo abaixo.
-$montarUrlUpload = function (?string $caminhoRelativo) use ($urlBase): ?string {
-    if (empty($caminhoRelativo)) {
-        return null;
-    }
-    $limpo = ltrim(trim($caminhoRelativo), '/');
-    $limpo = preg_replace('#^(assets/)?(uploads/)+#', '', $limpo);
-    return $urlBase . '/assets/uploads/' . htmlspecialchars($limpo);
-};
-
-$srcFundo = $montarUrlUpload($fotoFundoSessao);
 
 if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
     $srcFoto = $urlBase . '/assets/img/logo.png';
@@ -104,6 +92,12 @@ if ($tipoPerfil === 'administrador' || $tipoPerfil === 'admin') {
         ['label' => 'Sair',             'icone' => 'sair.svg',          'url' => '/logout'],
         ['label' => 'Denunciar',        'icone' => 'denunciar.svg',     'url' => '/denuncias/nova'],
     ];
+
+    // RF 20 (inverso): sem aprovação envolvida (Adotante não passa por validação), então o
+    // botão só some quando a pessoa já tem o perfil de Adotante.
+    if (!$jaEhAdotante) {
+        $botoes[] = ['label' => 'Torne-se Adotante', 'icone' => 'torne-se.svg', 'url' => '/onboarding/adotante'];
+    }
 } elseif ($tipoPerfil === 'usuario') {
     // Sem nenhum perfil ativo (ex: admin desativou todos os perfis da pessoa, ou ela nunca
     // completou o onboarding). Não existe um Adotante/Protetor "de verdade" pra editar ou
@@ -142,23 +136,6 @@ $paginasBotoes = array_chunk($botoes, 6);
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
 
 <div class="max-w-md mx-auto bg-background min-h-screen pb-20">
-
-    <?php if (in_array($tipoPerfil, ['ong', 'protetor'], true)): ?>
-        <!-- Mídia de Capa da Página (foto_fundo) -->
-        <div class="relative w-full h-36 sm:h-44 overflow-hidden rounded-b-3xl shadow-sm <?= $srcFundo ? '' : 'bg-gradient-to-r from-roxoApagado to-rosa-2 dark:from-preto2 dark:to-preto3' ?>">
-            <?php if ($srcFundo): ?>
-                <img src="<?= $srcFundo ?>"
-                     alt="Foto de capa"
-                     class="w-full h-full object-cover"
-                     onerror="this.style.display='none';">
-            <?php else: ?>
-                <div class="w-full h-full flex items-center justify-center opacity-40">
-                    <img src="<?= URL_BASE ?>/assets/icons/geral/patinha-coracao.svg" class="h-12 w-12 object-contain" alt="">
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
     <div class="px-6 -mt-4 pt-10 flex flex-col items-center">
 
         <!-- Badge de Perfil Atual (formato de fita/banner, como no protótipo) -->
